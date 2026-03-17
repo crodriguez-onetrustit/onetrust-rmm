@@ -309,3 +309,43 @@ if __name__ == '__main__':
             print(f"Error getting software: {e}")
         
         return software[:100]  # Limit to 100 items
+
+    def kill_process(self, pid):
+        """Kill a process by PID"""
+        try:
+            import signal
+            import os
+            os.kill(pid, signal.SIGTERM)
+            return {"success": True, "message": f"Process {pid} terminated"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def get_network_connections(self):
+        """Get network connections"""
+        connections = []
+        try:
+            for conn in psutil.net_connections():
+                if conn.laddr:
+                    connections.append({
+                        'proto': conn.type.name,
+                        'local_addr': f"{conn.laddr.ip}:{conn.laddr.port}",
+                        'status': conn.status,
+                        'pid': conn.pid
+                    })
+        except:
+            pass
+        return connections[:50]
+    
+    def get_windows_services(self):
+        """Get Windows services"""
+        services = []
+        try:
+            if self.os == 'windows':
+                import win32serviceutil
+                import win32service
+                import servicemanager
+                # Simplified - just return empty for now
+                pass
+        except:
+            pass
+        return services
