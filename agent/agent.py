@@ -199,3 +199,69 @@ if __name__ == '__main__':
     
     agent = RMMAgent(args.server)
     agent.run(interval=args.interval)
+
+    def run_command(self, cmd):
+        """Run a command and return output"""
+        try:
+            if self.os == 'windows':
+                result = subprocess.run(
+                    cmd, shell=True, capture_output=True, text=True, timeout=300
+                )
+            else:
+                result = subprocess.run(
+                    cmd, shell=True, capture_output=True, text=True, timeout=300,
+                    executable='/bin/bash'
+                )
+            return {
+                'output': result.stdout,
+                'error': result.stderr,
+                'exit_code': result.returncode
+            }
+        except subprocess.TimeoutExpired:
+            return {'output': '', 'error': 'Command timed out', 'exit_code': -1}
+        except Exception as e:
+            return {'output': '', 'error': str(e), 'exit_code': -1}
+    
+    def check_for_tasks(self):
+        """Check for pending tasks from server"""
+        try:
+            response = requests.post(
+                f'{self.server_url}/api/agent/tasks/',
+                json={'agent_id': self.agent_id},
+                timeout=10
+            )
+            if response.status_code == 200:
+                return response.json().get('tasks', [])
+        except:
+            pass
+        return []
+    
+    def report_task_complete(self, task_id, output, error, exit_code):
+        """Report task completion to server"""
+        try:
+            requests.post(
+                f'{self.server_url}/api/agent/task/complete/',
+                json={
+                    'task_id': task_id,
+                    'output': output,
+                    'error': error,
+                    'exit_code': exit_code,
+                    'status': 'completed' if exit_code == 0 else 'failed'
+                },
+                timeout=10
+            )
+        except:
+            pass
+    
+    def process_tasks(self):
+        """Check and process pending tasks"""
+        tasks = self.check_for_tasks()
+        for task in tasks:
+            print(f"Processing task {task['id']}...")
+            result = self.run_command(task['command'])
+            self.report_task_complete(
+                task['id'],
+                result.get('output', ''),
+                result.get('error', ''),
+                result.get('exit_code', -1)
+            )
