@@ -265,3 +265,47 @@ if __name__ == '__main__':
                 result.get('error', ''),
                 result.get('exit_code', -1)
             )
+
+    def get_installed_software(self):
+        """Get list of installed software"""
+        software = []
+        
+        try:
+            if self.os == 'windows':
+                import winreg
+                keys = [
+                    (winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'),
+                    (winreg.HKEY_CURRENT_USER, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'),
+                ]
+                for hkey, path in keys:
+                    try:
+                        key = winreg.OpenKey(hkey, path)
+                        i = 0
+                        while True:
+                            try:
+                                subkey = winreg.EnumKey(key, i)
+                                software.append(subkey)
+                                i += 1
+                            except:
+                                break
+                        winreg.CloseKey(key)
+                    except:
+                        pass
+            
+            elif self.os == 'linux':
+                # Check dpkg
+                result = subprocess.run(['dpkg', '--get-selections'], capture_output=True, text=True)
+                for line in result.stdout.split('\n'):
+                    if line.strip():
+                        software.append(line.split()[0])
+            
+            elif self.os == 'macos':
+                # Check installed packages
+                result = subprocess.run(['ls', '/Applications'], capture_output=True, text=True)
+                for app in result.stdout.split('\n'):
+                    if app.strip():
+                        software.append(app.strip())
+        except Exception as e:
+            print(f"Error getting software: {e}")
+        
+        return software[:100]  # Limit to 100 items
