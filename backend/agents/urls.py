@@ -13,4 +13,9 @@ router.register(r'checks', views.CheckViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    
+    # Agent endpoints (no auth)
+    path('agent/heartbeat/', views.agent_heartbeat, name='agent-heartbeat'),
+    path('agent/tasks/', views.agent_task, name='agent-tasks'),
+    path('agent/task/complete/', views.agent_task_complete, name='agent-task-complete'),
 ]

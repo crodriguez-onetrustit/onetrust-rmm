@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Client, Site, Agent, Script, Task, Alert, Check
@@ -7,6 +7,91 @@ from .serializers import (
     ClientSerializer, SiteSerializer, AgentSerializer, 
     ScriptSerializer, TaskSerializer, AlertSerializer, CheckSerializer
 )
+
+# Agent API - public endpoints for agent communication
+@permission_classes([AllowAny])
+def agent_heartbeat(request):
+    """Agent heartbeat - no auth required"""
+    from django.utils import timezone
+    
+    agent_id = request.data.get('agent_id')
+    hostname = request.data.get('hostname')
+    os_type = request.data.get('os')
+    ip_address = request.data.get('ip_address')
+    cpu = request.data.get('cpu_usage', 0)
+    memory = request.data.get('memory_usage', 0)
+    disk = request.data.get('disk_usage', 0)
+    
+    try:
+        agent = Agent.objects.get(agent_id=agent_id)
+        agent.status = 'online'
+        agent.last_seen = timezone.now()
+        agent.ip_address = ip_address
+        agent.cpu_usage = cpu
+        agent.memory_usage = memory
+        agent.disk_usage = disk
+        agent.save()
+        return Response({'status': 'ok', 'action': 'updated'})
+    except Agent.DoesNotExist:
+        # Create new agent if doesn't exist
+        site, _ = Site.objects.get_or_create(
+            name='Default Site',
+            client=Client.objects.first() or Client.objects.create(name='Default Client')
+        )
+        agent = Agent.objects.create(
+            site=site,
+            agent_id=agent_id,
+            hostname=hostname,
+            os=os_type,
+            ip_address=ip_address,
+            status='online',
+            cpu_usage=cpu,
+            memory_usage=memory,
+            disk_usage=disk,
+            last_seen=timezone.now()
+        )
+        return Response({'status': 'ok', 'action': 'created', 'agent_id': agent.id})
+    except Exception as e:
+        return Response({'status': 'error', 'message': str(e)}, status=400)
+
+@permission_classes([AllowAny])
+def agent_task(request):
+    """Get pending tasks for agent"""
+    agent_id = request.data.get('agent_id')
+    
+    try:
+        agent = Agent.objects.get(agent_id=agent_id)
+        pending_tasks = agent.tasks.filter(status='pending')
+        
+        tasks_data = []
+        for task in pending_tasks:
+            tasks_data.append({
+                'id': task.id,
+                'command': task.command or task.script.content if task.script else '',
+                'script_type': task.script.script_type if task.script else 'bash'
+            })
+        
+        return Response({'tasks': tasks_data})
+    except Agent.DoesNotExist:
+        return Response({'tasks': []})
+
+@permission_classes([AllowAny])
+def agent_task_complete(request):
+    """Mark task as completed"""
+    task_id = request.data.get('task_id')
+    output = request.data.get('output', '')
+    error = request.data.get('error', '')
+    status_result = request.data.get('status', 'completed')
+    
+    try:
+        task = Task.objects.get(id=task_id)
+        task.status = status_result
+        task.output = output
+        task.error = error
+        task.save()
+        return Response({'status': 'ok'})
+    except Task.DoesNotExist:
+        return Response({'status': 'error', 'message': 'Task not found'}, status=404)
 
 class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all()
